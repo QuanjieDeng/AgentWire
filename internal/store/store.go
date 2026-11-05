@@ -242,7 +242,7 @@ func (s *Store) ListUsers() ([]User, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []User
+	out := []User{}
 	for rows.Next() {
 		var u User
 		var mc int
@@ -329,7 +329,7 @@ func (s *Store) ListTokens(userID int64) ([]TokenInfo, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []TokenInfo
+	out := []TokenInfo{}
 	for rows.Next() {
 		var t TokenInfo
 		var rev, used sql.NullInt64
@@ -415,7 +415,7 @@ func (s *Store) TeamsForUser(userID int64) ([]Team, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Team
+	out := []Team{}
 	for rows.Next() {
 		var t Team
 		if err := rows.Scan(&t.ID, &t.Name, &t.OwnerID, &t.Status, &t.CreatedAt); err != nil {
@@ -437,7 +437,7 @@ func (s *Store) SharedTeams(a, b int64) ([]Team, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Team
+	out := []Team{}
 	for rows.Next() {
 		var t Team
 		if err := rows.Scan(&t.ID, &t.Name, &t.OwnerID, &t.Status, &t.CreatedAt); err != nil {
@@ -492,7 +492,7 @@ func (s *Store) TeamMembers(teamID int64) ([]Member, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Member
+	out := []Member{}
 	for rows.Next() {
 		var m Member
 		if err := rows.Scan(&m.ID, &m.Username, &m.Role, &m.Status, &m.JoinedAt); err != nil {
@@ -563,7 +563,7 @@ func (s *Store) ListInvites(teamID int64) ([]InviteInfo, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []InviteInfo
+	out := []InviteInfo{}
 	for rows.Next() {
 		var i InviteInfo
 		if err := rows.Scan(&i.ExpiresAt, &i.MaxUses, &i.UsedCount); err != nil {
@@ -736,7 +736,7 @@ func (s *Store) Deliveries(msgID string) ([]DeliveryInfo, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []DeliveryInfo
+	out := []DeliveryInfo{}
 	for rows.Next() {
 		var d DeliveryInfo
 		if err := rows.Scan(&d.TargetUser, &d.TargetMachine, &d.TargetSession, &d.Status); err != nil {
@@ -766,7 +766,7 @@ func (s *Store) ListAudit(limit int) ([]AuditEntry, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []AuditEntry
+	out := []AuditEntry{}
 	for rows.Next() {
 		var e AuditEntry
 		if err := rows.Scan(&e.ID, &e.At, &e.Actor, &e.Action, &e.TeamID, &e.MsgID, &e.Size, &e.Result, &e.SourceIP); err != nil {

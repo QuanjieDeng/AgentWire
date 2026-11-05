@@ -77,6 +77,13 @@ func (h *Hub) serveSPA(w http.ResponseWriter, r *http.Request) {
 	if _, err := fs.Stat(h.cfg.WebFS, p); err != nil {
 		p = "index.html"
 	}
+	if p == "index.html" {
+		// Always revalidate the entry document so upgrades pick up new bundles.
+		w.Header().Set("Cache-Control", "no-cache")
+	} else if strings.HasPrefix(p, "assets/") {
+		// Vite filenames are content-hashed.
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
 	http.ServeFileFS(w, r, h.cfg.WebFS, p)
 }
 
@@ -221,7 +228,7 @@ func (h *Hub) recordLoginFailure(ip string) {
 
 func (h *Hub) me(w http.ResponseWriter, u *store.User) {
 	teams, _ := h.st.TeamsForUser(u.ID)
-	var out []map[string]any
+	out := []map[string]any{}
 	for _, t := range teams {
 		_, role, _ := h.st.IsMember(t.ID, u.ID)
 		members, _ := h.st.TeamMembers(t.ID)
@@ -306,7 +313,7 @@ func (h *Hub) listTeams(w http.ResponseWriter, r *http.Request, u *store.User) {
 		writeError(w, 500, err.Error())
 		return
 	}
-	var out []map[string]any
+	out := []map[string]any{}
 	for _, t := range teams {
 		_, role, _ := h.st.IsMember(t.ID, u.ID)
 		members, _ := h.st.TeamMembers(t.ID)
@@ -487,7 +494,7 @@ func (h *Hub) listUsers(w http.ResponseWriter, r *http.Request, u *store.User) {
 		writeError(w, 500, err.Error())
 		return
 	}
-	var out []map[string]any
+	out := []map[string]any{}
 	for i := range users {
 		out = append(out, userJSON(&users[i]))
 	}
@@ -637,7 +644,7 @@ func (h *Hub) sessionViews(userID int64) []sessionView {
 		}
 	}
 	h.mu.Unlock()
-	var out []sessionView
+	out := []sessionView{}
 	for _, c := range conns {
 		c.mu.Lock()
 		for _, s := range c.sessions {

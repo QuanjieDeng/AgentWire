@@ -567,6 +567,21 @@ func TestInviteJoinAndOwnerOnly(t *testing.T) {
 	}
 }
 
+func TestEmptyListEndpointsReturnArrays(t *testing.T) {
+	e := newEnv(t)
+	e.userWithToken("solo")
+	client := e.loginClient("solo", "password-solo")
+
+	status, body := doJSON(t, client, "GET", e.srv.URL+"/api/teams", "")
+	if status != 200 || !strings.Contains(string(body), `"teams":[]`) {
+		t.Fatalf("empty teams must be [], got %d %s", status, body)
+	}
+	status, body = doJSON(t, client, "GET", e.srv.URL+"/api/me/sessions", "")
+	if status != 200 || !strings.Contains(string(body), `"sessions":[]`) {
+		t.Fatalf("empty sessions must be [], got %d %s", status, body)
+	}
+}
+
 func TestReplyWorksAfterWelcomeWriteDeadline(t *testing.T) {
 	e := newEnv(t)
 	alice, aTok := e.userWithToken("alice")

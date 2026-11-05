@@ -294,7 +294,7 @@ function Teams() {
             </span>
           </button>
         ))}
-        {data && data.teams.length === 0 && <p className="muted">还没有加入任何 team。</p>}
+        {data && (data.teams?.length ?? 0) === 0 && <p className="muted">还没有加入任何 team。</p>}
       </div>
       {selected && <TeamDetail name={selected} onChanged={reload} />}
     </section>
@@ -335,7 +335,7 @@ function TeamDetail({ name, onChanged }: { name: string; onChanged: () => void }
           </tr>
         </thead>
         <tbody>
-          {data.members.map((m: Member) => (
+          {(data.members ?? []).map((m: Member) => (
             <tr key={m.id}>
               <td>{m.username}</td>
               <td>{m.role}</td>
