@@ -290,7 +290,7 @@ function Teams() {
           >
             <strong>{t.name}</strong>
             <span className="muted small">
-              {t.role === "owner" ? "owner" : "member"} · {t.members} 人
+              {t.role || "member"} · {t.members} 人
             </span>
           </button>
         ))}
@@ -306,10 +306,12 @@ function TeamDetail({ name, onChanged }: { name: string; onChanged: () => void }
   const [ttl, setTtl] = useState(168);
   const [maxUses, setMaxUses] = useState(1);
   const [invite, setInvite] = useState("");
+  const [newMember, setNewMember] = useState("");
   const [msg, setMsg] = useState("");
 
   if (error) return <p className="error">{error}</p>;
   if (!data) return <p className="muted">加载中…</p>;
+  const canManage = data.team.can_manage ?? data.team.owner;
 
   return (
     <div className="card detail">
@@ -331,7 +333,7 @@ function TeamDetail({ name, onChanged }: { name: string; onChanged: () => void }
             <th>用户名</th>
             <th>角色</th>
             <th>加入时间</th>
-            {data.team.owner && <th></th>}
+            {canManage && <th></th>}
           </tr>
         </thead>
         <tbody>
@@ -340,7 +342,7 @@ function TeamDetail({ name, onChanged }: { name: string; onChanged: () => void }
               <td>{m.username}</td>
               <td>{m.role}</td>
               <td>{fmtTime(m.joined_at)}</td>
-              {data.team.owner && (
+              {canManage && (
                 <td>
                   {m.role !== "owner" && (
                     <button
@@ -366,8 +368,35 @@ function TeamDetail({ name, onChanged }: { name: string; onChanged: () => void }
         </tbody>
       </table>
 
-      {data.team.owner ? (
+      {canManage ? (
         <>
+          <h3>添加成员</h3>
+          <form
+            className="inline"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const who = newMember.trim();
+              if (!who) return;
+              try {
+                const r = await api.addMember(name, who);
+                setMsg(r.already_member ? `${who} 已在 team 中` : `已添加 ${who}`);
+                setNewMember("");
+                reload();
+                onChanged();
+              } catch (e) {
+                setMsg(errText(e));
+              }
+            }}
+          >
+            <input
+              placeholder="用户名"
+              value={newMember}
+              onChange={(e) => setNewMember(e.target.value)}
+            />
+            <button>直接加入</button>
+          </form>
+          <p className="muted small">也可以生成邀请码，让对方自己加入。</p>
+
           <h3>邀请码</h3>
           <div className="inline">
             <label className="compact">

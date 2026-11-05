@@ -13,6 +13,7 @@ export interface Team {
   role: string;
   owner: boolean;
   members: number;
+  can_manage?: boolean;
 }
 
 export interface Member {
@@ -103,11 +104,23 @@ export const api = {
     request("/api/join", { method: "POST", body: JSON.stringify({ code }) }),
   team: (name: string) =>
     request<{
-      team: { id: number; name: string; role: string; owner: boolean };
+      team: {
+        id: number;
+        name: string;
+        role: string;
+        owner: boolean;
+        member?: boolean;
+        can_manage?: boolean;
+      };
       members: Member[];
       invites?: { expires_at: number; max_uses: number; used_count: number }[];
       stats?: { sent: number; delivered: number; queued: number; failed: number };
     }>(`/api/teams/${encodeURIComponent(name)}`),
+  addMember: (name: string, username: string) =>
+    request<{ ok: boolean; already_member?: boolean }>(
+      `/api/teams/${encodeURIComponent(name)}/members`,
+      { method: "POST", body: JSON.stringify({ username }) }
+    ),
   createInvite: (name: string, ttlHours: number, maxUses: number) =>
     request<{ code: string }>(`/api/teams/${encodeURIComponent(name)}/invites`, {
       method: "POST",

@@ -49,6 +49,7 @@ func (h *Hub) registerAdmin(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/join", h.wrap(false, h.joinTeam))
 	mux.HandleFunc("GET /api/teams/{name}", h.wrap(false, h.teamDetail))
 	mux.HandleFunc("POST /api/teams/{name}/invites", h.wrap(false, h.createInvite))
+	mux.HandleFunc("POST /api/teams/{name}/members", h.wrap(false, h.addMember))
 	mux.HandleFunc("POST /api/teams/{name}/leave", h.wrap(false, h.leaveTeam))
 	mux.HandleFunc("DELETE /api/teams/{name}/members/{user}", h.wrap(false, h.removeMember))
 	mux.HandleFunc("POST /api/teams/{name}/archive", h.wrap(false, h.archiveTeam))
@@ -308,7 +309,13 @@ func (h *Hub) revokeToken(w http.ResponseWriter, r *http.Request, u *store.User)
 // ---------- teams ----------
 
 func (h *Hub) listTeams(w http.ResponseWriter, r *http.Request, u *store.User) {
-	teams, err := h.st.TeamsForUser(u.ID)
+	var teams []store.Team
+	var err error
+	if u.Role == "admin" {
+		teams, err = h.st.AllActiveTeams()
+	} else {
+		teams, err = h.st.TeamsForUser(u.ID)
+	}
 	if err != nil {
 		writeError(w, 500, err.Error())
 		return
@@ -316,8 +323,14 @@ func (h *Hub) listTeams(w http.ResponseWriter, r *http.Request, u *store.User) {
 	out := []map[string]any{}
 	for _, t := range teams {
 		_, role, _ := h.st.IsMember(t.ID, u.ID)
+		if role == "" && u.Role == "admin" {
+			role = "admin"
+		}
 		members, _ := h.st.TeamMembers(t.ID)
-		out = append(out, map[string]any{"id": t.ID, "name": t.Name, "owner": t.OwnerID == u.ID, "role": role, "members": len(members)})
+		out = append(out, map[string]any{
+			"id": t.ID, "name": t.Name, "owner": t.OwnerID == u.ID, "role": role,
+			"members": len(members), "can_manage": t.OwnerID == u.ID || u.Role == "admin",
+		})
 	}
 	writeJSON(w, 200, map[string]any{"teams": out})
 }
@@ -361,17 +374,24 @@ func (h *Hub) joinTeam(w http.ResponseWriter, r *http.Request, u *store.User) {
 }
 
 func (h *Hub) teamDetail(w http.ResponseWriter, r *http.Request, u *store.User) {
-	t, ok := h.memberTeam(w, r, u)
+	t, ok := h.viewTeam(w, r, u)
 	if !ok {
 		return
 	}
-	_, role, _ := h.st.IsMember(t.ID, u.ID)
+	isMember, role, _ := h.st.IsMember(t.ID, u.ID)
+	if role == "" && u.Role == "admin" {
+		role = "admin"
+	}
+	canManage := t.OwnerID == u.ID || u.Role == "admin"
 	members, _ := h.st.TeamMembers(t.ID)
 	body := map[string]any{
-		"team":    map[string]any{"id": t.ID, "name": t.Name, "owner": t.OwnerID == u.ID, "role": role},
+		"team": map[string]any{
+			"id": t.ID, "name": t.Name, "owner": t.OwnerID == u.ID,
+			"role": role, "member": isMember, "can_manage": canManage,
+		},
 		"members": members,
 	}
-	if role == "owner" || u.Role == "admin" {
+	if canManage {
 		invites, _ := h.st.ListInvites(t.ID)
 		stats, _ := h.st.TeamStats(t.ID)
 		body["invites"] = invites
@@ -381,7 +401,7 @@ func (h *Hub) teamDetail(w http.ResponseWriter, r *http.Request, u *store.User) 
 }
 
 func (h *Hub) createInvite(w http.ResponseWriter, r *http.Request, u *store.User) {
-	t, ok := h.ownerTeam(w, r, u)
+	t, ok := h.manageTeam(w, r, u)
 	if !ok {
 		return
 	}
@@ -419,7 +439,7 @@ func (h *Hub) leaveTeam(w http.ResponseWriter, r *http.Request, u *store.User) {
 }
 
 func (h *Hub) removeMember(w http.ResponseWriter, r *http.Request, u *store.User) {
-	t, ok := h.ownerTeam(w, r, u)
+	t, ok := h.manageTeam(w, r, u)
 	if !ok {
 		return
 	}
@@ -438,7 +458,7 @@ func (h *Hub) removeMember(w http.ResponseWriter, r *http.Request, u *store.User
 }
 
 func (h *Hub) archiveTeam(w http.ResponseWriter, r *http.Request, u *store.User) {
-	t, ok := h.ownerTeam(w, r, u)
+	t, ok := h.manageTeam(w, r, u)
 	if !ok {
 		return
 	}
@@ -448,7 +468,7 @@ func (h *Hub) archiveTeam(w http.ResponseWriter, r *http.Request, u *store.User)
 }
 
 func (h *Hub) teamStats(w http.ResponseWriter, r *http.Request, u *store.User) {
-	t, ok := h.ownerTeam(w, r, u)
+	t, ok := h.manageTeam(w, r, u)
 	if !ok {
 		return
 	}
@@ -474,16 +494,70 @@ func (h *Hub) memberTeam(w http.ResponseWriter, r *http.Request, u *store.User) 
 	return t, true
 }
 
-func (h *Hub) ownerTeam(w http.ResponseWriter, r *http.Request, u *store.User) (*store.Team, bool) {
-	t, ok := h.memberTeam(w, r, u)
-	if !ok {
+// viewTeam allows team members and platform admins (who may not be members).
+func (h *Hub) viewTeam(w http.ResponseWriter, r *http.Request, u *store.User) (*store.Team, bool) {
+	t, err := h.st.TeamByName(r.PathValue("name"))
+	if err != nil || t.Status != "active" {
+		writeError(w, 404, "team 不存在或已归档")
 		return nil, false
 	}
-	if t.OwnerID != u.ID {
-		writeError(w, 403, "需要 team owner 权限")
+	isMember, _, _ := h.st.IsMember(t.ID, u.ID)
+	if !isMember && u.Role != "admin" {
+		writeError(w, 403, "你不在该 team 中")
 		return nil, false
 	}
 	return t, true
+}
+
+// manageTeam allows the team owner or a platform admin.
+func (h *Hub) manageTeam(w http.ResponseWriter, r *http.Request, u *store.User) (*store.Team, bool) {
+	t, err := h.st.TeamByName(r.PathValue("name"))
+	if err != nil || t.Status != "active" {
+		writeError(w, 404, "team 不存在或已归档")
+		return nil, false
+	}
+	if t.OwnerID != u.ID && u.Role != "admin" {
+		writeError(w, 403, "需要 team owner 或平台管理员权限")
+		return nil, false
+	}
+	return t, true
+}
+
+// addMember lets an owner or platform admin add a user by name, bypassing invites.
+func (h *Hub) addMember(w http.ResponseWriter, r *http.Request, u *store.User) {
+	t, ok := h.manageTeam(w, r, u)
+	if !ok {
+		return
+	}
+	var req struct {
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
+		writeError(w, 400, "请求格式错误")
+		return
+	}
+	target, err := h.st.UserByName(strings.TrimSpace(req.Username))
+	if err != nil {
+		writeError(w, 404, "用户不存在")
+		return
+	}
+	if target.Status != "active" {
+		writeError(w, 400, "该用户已被禁用")
+		return
+	}
+	isMember, _, _ := h.st.IsMember(t.ID, target.ID)
+	if isMember {
+		writeJSON(w, 200, map[string]any{"ok": true, "already_member": true})
+		return
+	}
+	if err := h.st.AddMember(t.ID, target.ID, "member"); err != nil {
+		writeError(w, 500, err.Error())
+		return
+	}
+	h.st.Audit(u.ID, "member_add", t.ID, "", 0, "ok", remoteIP(r))
+	writeJSON(w, 200, map[string]any{"ok": true, "member": map[string]any{
+		"id": target.ID, "username": target.Username, "role": "member",
+	}})
 }
 
 // ---------- admin ----------

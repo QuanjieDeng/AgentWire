@@ -567,6 +567,61 @@ func TestInviteJoinAndOwnerOnly(t *testing.T) {
 	}
 }
 
+func TestAdminCanDirectlyManageAnyTeam(t *testing.T) {
+	e := newEnv(t)
+	alice, _ := e.userWithToken("alice")
+	e.userWithToken("bob")
+	e.userWithToken("carol")
+	e.adminWithToken("root")
+	e.team("proj", alice)
+	e.team("other", alice) // second team owned by alice, for visibility checks
+
+	admin := e.loginClient("root", "password-root")
+
+	// A platform admin sees every active team, including ones they are not in.
+	status, body := doJSON(t, admin, "GET", e.srv.URL+"/api/teams", "")
+	if status != 200 || !strings.Contains(string(body), `"proj"`) || !strings.Contains(string(body), `"other"`) {
+		t.Fatalf("admin should see all teams: %d %s", status, body)
+	}
+
+	// Direct add by username, without an invite.
+	status, body = doJSON(t, admin, "POST", e.srv.URL+"/api/teams/proj/members", `{"username":"bob"}`)
+	if status != 200 {
+		t.Fatalf("admin add member: %d %s", status, body)
+	}
+
+	status, body = doJSON(t, admin, "GET", e.srv.URL+"/api/teams/proj", "")
+	if status != 200 || !strings.Contains(string(body), `"can_manage":true`) ||
+		!strings.Contains(string(body), `"username":"bob"`) {
+		t.Fatalf("admin team detail should include bob and can_manage: %d %s", status, body)
+	}
+
+	// A plain member cannot add others.
+	bob := e.loginClient("bob", "password-bob")
+	status, _ = doJSON(t, bob, "POST", e.srv.URL+"/api/teams/proj/members", `{"username":"carol"}`)
+	if status != 403 {
+		t.Fatalf("member should not add members, got %d", status)
+	}
+
+	// The team owner can add directly too.
+	aliceClient := e.loginClient("alice", "password-alice")
+	status, body = doJSON(t, aliceClient, "POST", e.srv.URL+"/api/teams/proj/members", `{"username":"carol"}`)
+	if status != 200 {
+		t.Fatalf("owner add member: %d %s", status, body)
+	}
+
+	// Admin can remove a member from a team they do not own.
+	status, body = doJSON(t, admin, "DELETE", e.srv.URL+"/api/teams/proj/members/bob", "")
+	if status != 200 {
+		t.Fatalf("admin remove member: %d %s", status, body)
+	}
+
+	status, body = doJSON(t, admin, "GET", e.srv.URL+"/api/audit?limit=50", "")
+	if status != 200 || !strings.Contains(string(body), `"member_add"`) {
+		t.Fatalf("member_add should be audited: %d %s", status, body)
+	}
+}
+
 func TestEmptyListEndpointsReturnArrays(t *testing.T) {
 	e := newEnv(t)
 	e.userWithToken("solo")

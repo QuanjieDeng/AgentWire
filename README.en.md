@@ -173,7 +173,9 @@ Claude Code after installing so the MCP tools load.
 
 1. Open `http://<hub>:8443/`, log in as admin.
 2. **Users → create user** gives a one-time initial password.
-3. **Teams → create team**, then generate an invite code.
+3. **Teams → create team**, then generate an invite code — or add members directly by
+   username (team owner or platform admin). Platform admins see every team and can manage
+   members without joining it first.
 4. Each teammate, under their own OS user:
 
 ```bash

@@ -426,6 +426,25 @@ func (s *Store) TeamsForUser(userID int64) ([]Team, error) {
 	return out, rows.Err()
 }
 
+// AllActiveTeams returns every active team (platform-admin view).
+func (s *Store) AllActiveTeams() ([]Team, error) {
+	rows, err := s.db.Query(`SELECT id,name,owner_user_id,status,created_at
+		FROM teams WHERE status='active' ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Team{}
+	for rows.Next() {
+		var t Team
+		if err := rows.Scan(&t.ID, &t.Name, &t.OwnerID, &t.Status, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // SharedTeams returns active teams both users belong to.
 func (s *Store) SharedTeams(a, b int64) ([]Team, error) {
 	rows, err := s.db.Query(`SELECT t.id,t.name,t.owner_user_id,t.status,t.created_at
