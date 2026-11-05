@@ -79,6 +79,38 @@ func TestToolsList(t *testing.T) {
 	}
 }
 
+func TestToolSchemasAreValid(t *testing.T) {
+	for _, tool := range toolDefs() {
+		schema, ok := tool["inputSchema"].(map[string]any)
+		if !ok || schema["type"] != "object" {
+			t.Fatalf("%v: bad inputSchema", tool["name"])
+		}
+		props, _ := schema["properties"].(map[string]any)
+		if props == nil {
+			t.Fatalf("%v: missing properties", tool["name"])
+		}
+		if req, ok := schema["required"]; ok {
+			reqs, ok := req.([]string)
+			if !ok {
+				t.Fatalf("%v: required must be an array, got %T", tool["name"], req)
+			}
+			for _, name := range reqs {
+				if _, ok := props[name]; !ok {
+					t.Fatalf("%v: required %q has no property", tool["name"], name)
+				}
+			}
+		}
+	}
+
+	raw, err := json.Marshal(toolDefs())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"required":null`) {
+		t.Fatal("inputSchema must not contain required:null")
+	}
+}
+
 func TestSendForwardsToDaemonAndReturnsStatus(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", dir)

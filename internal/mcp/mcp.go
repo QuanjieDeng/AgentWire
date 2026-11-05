@@ -100,7 +100,13 @@ func (s *Server) initialize(params json.RawMessage) map[string]any {
 
 func toolDefs() []map[string]any {
 	obj := func(props map[string]any, required ...string) map[string]any {
-		return map[string]any{"type": "object", "properties": props, "required": required}
+		schema := map[string]any{"type": "object", "properties": props}
+		// Omitting the key is valid JSON Schema; `"required": null` is not, and
+		// strict MCP clients reject the whole tools/list response.
+		if len(required) > 0 {
+			schema["required"] = required
+		}
+		return schema
 	}
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 	return []map[string]any{
