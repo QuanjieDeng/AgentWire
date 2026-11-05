@@ -1,0 +1,8 @@
+bin/
+web/node_modules/
+.claude/
+*.db
+*.db-shm
+*.db-wal
+*.log
+.DS_Store
