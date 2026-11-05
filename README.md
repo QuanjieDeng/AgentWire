@@ -26,6 +26,7 @@ Claude Code 自带的跨会话消息只在同一个系统用户内有效。Agent
 - [架构](#架构)
 - [环境要求](#环境要求)
 - [快速开始](#快速开始)
+- [用 AI 安装（提示词）](#用-ai-安装提示词)
 - [多人使用](#多人使用)
 - [MCP 工具](#mcp-工具)
 - [接收模式](#接收模式)
@@ -203,6 +204,66 @@ daemon 会读取 `~/.claude/sessions`，发现存活的 Claude 会话并每 10 �
 > 用 agent_members 查看 myteam；再看看 agent_inbox。
 
 此时只有一个成员（你自己）。发消息需要第二个成员，继续看下一节。
+
+---
+
+## 用 AI 安装（提示词）
+
+把下面整段提示词复制给 Claude Code（或任意能执行命令的 AI），替换两个 `<...>` 占位符后发送。它会完成构建、注册 MCP、安装 hook、引导你登录并启动 daemon。
+
+```text
+你在一台需要接入 AgentWire 的开发机上。请帮我安装本地 MCP 并启动 daemon，让 Claude Code 能使用 agent_* 工具。
+
+我的信息：
+- 中心服务地址：<填 http://hub:8443>
+- 用户名：<填我的用户名>
+- 仓库路径：<留空则使用 ~/AgentWire>
+
+请按顺序执行，任何一步失败就停止并报告原始错误：
+
+1. 环境检查
+   - `claude --version` 必须 >= 2.1.224
+   - `go version` 必须 >= 1.26
+   - 缺少任一项就告诉我需要先安装什么，不要继续。
+
+2. 获取并构建
+   - 如果仓库路径不存在：`git clone https://github.com/QuanjieDeng/AgentWire.git ~/AgentWire`
+   - 进入仓库；如果 internal/webui/dist/index.html 不存在：
+     `cd web && npm ci && npm run build && cd ..`
+   - `go build -o bin/agentwire ./cmd/agentwire`
+
+3. 安装到稳定路径
+   - Linux：`mkdir -p ~/.local/bin && install -m 0755 bin/agentwire ~/.local/bin/agentwire`
+   - Windows：使用构建出的 bin\agentwire.exe 的绝对路径
+   - 后续命令使用这个稳定路径，避免仓库移动后 MCP 失效。
+
+4. 注册 MCP、hook 和 daemon 自启动
+   - 运行 `agentwire install`
+   - 如果 Linux 上没有可用的 systemd user 会话，改用 `agentwire install --no-service`，并告诉我需要手动常驻运行 daemon。
+   - 这会执行 `claude mcp add -s user` 并向 ~/.claude/settings.json 追加一个 UserPromptSubmit hook；不要额外修改其他配置。
+
+5. 登录（必须由我本人操作）
+   - 把这条命令交给我在终端执行，不要自己用管道、环境变量或 --password 运行：
+     `agentwire login --server <地址> --username <用户名>`
+   - 口令由我在终端输入。不要让我把口令或 token 发到对话里，也不要读取或打印任何 token、.key 文件。
+   - 我确认登录完成后，检查 ~/.config/agentwire/config.json 是否存在（Windows 为 %AppData%\agentwire\config.json；只看是否存在，不要打印内容）。
+
+6. 启动并验证 daemon
+   - 若已配置 systemd：`systemctl --user enable --now agentwire-daemon`
+   - 否则：提醒我在一个持久终端运行 `agentwire daemon`
+   - 验证：`claude mcp list` 的输出包含 agentwire；Linux 上 `systemctl --user is-active agentwire-daemon` 为 active，且 $XDG_RUNTIME_DIR/agentwire/daemon.sock 存在。
+   - 刚登录时 daemon 可能还在等待重启（RestartSec=5），等几秒后重试一次检查。
+
+7. 报告
+   - MCP 是否注册、daemon 是否在线、是否需要我重启 Claude Code 才能看到 agent_* 工具。
+   - 不要在当前会话调用 agent_* 工具。
+```
+
+说明：
+
+- `install` 只修改仓库自身、`~/.claude/settings.json` 的 hook 条目和 Claude 的 MCP 注册，不动其他配置。
+- 口令和 token 只在本机终端输入，不应出现在对话、命令行参数或脚本里。
+- 安装完成后必须**重开 Claude Code 会话**，MCP 工具才会加载。
 
 ---
 

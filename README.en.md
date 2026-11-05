@@ -84,6 +84,75 @@ then verify in a new Claude session:
 
 > Use agent_members for myteam and agent_inbox.
 
+## AI-assisted install (copy this prompt)
+
+Paste the prompt below into Claude Code (or any agent that can run commands), replace the
+two `<...>` placeholders, and send it. It builds AgentWire, registers the MCP server and
+hook, asks you to log in, and starts the daemon.
+
+```text
+You are on a developer machine that needs to connect to AgentWire. Install the local MCP
+and start the daemon so Claude Code can use the agent_* tools.
+
+My details:
+- Hub URL: <http://hub:8443>
+- Username: <my username>
+- Repo path: <leave blank for ~/AgentWire>
+
+Execute in order. If any step fails, stop and report the raw error.
+
+1. Prerequisites
+   - `claude --version` >= 2.1.224
+   - `go version` >= 1.26
+   - If either is missing, stop and tell me what to install.
+
+2. Fetch and build
+   - Clone https://github.com/QuanjieDeng/AgentWire.git to ~/AgentWire if the repo path
+     is missing.
+   - If internal/webui/dist/index.html is missing:
+     `cd web && npm ci && npm run build && cd ..`
+   - `go build -o bin/agentwire ./cmd/agentwire`
+
+3. Install to a stable path
+   - Linux: `mkdir -p ~/.local/bin && install -m 0755 bin/agentwire ~/.local/bin/agentwire`
+   - Windows: use the absolute path to bin\agentwire.exe
+   - Use this stable path for the remaining commands.
+
+4. Register MCP, hook and daemon autostart
+   - Run `agentwire install`
+   - If no systemd user session is available, use `agentwire install --no-service` and
+     tell me to run the daemon manually.
+   - This runs `claude mcp add -s user` and appends a UserPromptSubmit hook to
+     ~/.claude/settings.json. Do not change anything else.
+
+5. Login (I must do this myself)
+   - Give me this command to run in my own terminal; do not run it with a pipe,
+     environment variable, or --password:
+     `agentwire login --server <url> --username <username>`
+   - I will type the password. Never ask me to paste the password or token into the chat,
+     and never read or print tokens or .key files.
+   - After I confirm, check that ~/.config/agentwire/config.json exists (Windows:
+     %AppData%\agentwire\config.json; existence only, do not print it).
+
+6. Start and verify
+   - With systemd: `systemctl --user enable --now agentwire-daemon`
+   - Otherwise ask me to run `agentwire daemon` in a persistent terminal.
+   - Verify `claude mcp list` contains agentwire; on Linux
+     `systemctl --user is-active agentwire-daemon` is active and
+     $XDG_RUNTIME_DIR/agentwire/daemon.sock exists.
+   - Right after login the daemon may still be in its 5-second restart wait; retry the
+     check once after a few seconds.
+
+7. Report
+   - Whether MCP is registered, whether the daemon is online, and that I must restart
+     Claude Code to see the agent_* tools.
+   - Do not call any agent_* tool in this session.
+```
+
+`install` only touches the AgentWire repo, the hook entry in `~/.claude/settings.json`,
+and the Claude MCP registration. The password and token stay in your terminal. Restart
+Claude Code after installing so the MCP tools load.
+
 ## Adding teammates
 
 1. Open `http://<hub>:8443/`, log in as admin.
