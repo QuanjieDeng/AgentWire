@@ -175,6 +175,24 @@ func TestInboxModeStoresWithoutInjecting(t *testing.T) {
 	}
 }
 
+func TestWakeModeRecordsInboundInInbox(t *testing.T) {
+	d := testDaemon(t)
+	fp := startFakePeer(t, t.TempDir(), "")
+	writeKey(t, d.cfg.SessionsDir, 1234, "tok")
+	d.registry = map[string]registryEntry{"s1": {Pid: 1234, SessionID: "s1", MessagingSocketPath: fp.path}}
+	d.sessions = map[string]proto.Session{"s1": {ID: "s1"}}
+	d.modes["s1"] = "wake"
+
+	d.handleDeliver(proto.Frame{MsgID: "m7", ToSession: "s1", Team: "t", Body: "hi",
+		From: &proto.Peer{User: "alice", Session: "a1"}})
+	<-fp.lines
+
+	entries := d.inbox.list("s1", 10)
+	if len(entries) != 1 || entries[0].Direction != "in" || entries[0].Body != "hi" || !entries[0].Read {
+		t.Fatalf("wake-mode inbound not recorded: %+v", entries)
+	}
+}
+
 func TestAsyncDeliveryReceiptLandsInInbox(t *testing.T) {
 	d := testDaemon(t)
 	d.registry = map[string]registryEntry{"s1": {Pid: 1, SessionID: "s1"}}

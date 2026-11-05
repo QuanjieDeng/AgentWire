@@ -611,6 +611,39 @@ func TestArchivedTeamRejectsMessagesAndInvites(t *testing.T) {
 	}
 }
 
+func TestMutedTargetQueuesAndDeliversAfterUnmute(t *testing.T) {
+	e := newEnv(t)
+	alice, aTok := e.userWithToken("alice")
+	bob, bTok := e.userWithToken("bob")
+	e.team("proj", alice, bob)
+	ad := e.connect(aTok, "ma")
+	bd := e.connect(bTok, "mb")
+	ad.send(proto.Frame{Type: "heartbeat", Sessions: []proto.Session{session("a1", "p")}})
+	muted := session("b1", "p")
+	muted.Mode = "mute"
+	bd.send(proto.Frame{Type: "heartbeat", Sessions: []proto.Session{muted}})
+	ad.syncHeartbeat("proj")
+	bd.syncHeartbeat("proj")
+
+	ad.send(proto.Frame{Type: "send", MsgID: "mute1", To: "bob", Project: "p", Body: "hold", FromSession: "a1"})
+	reply := ad.read()
+	if reply.Status != proto.StatusQueued {
+		t.Fatalf("muted target should queue, got %+v", reply)
+	}
+
+	// Unmute: the next heartbeat must flush the queued message.
+	bd.send(proto.Frame{Type: "heartbeat", Sessions: []proto.Session{session("b1", "p")}})
+	for {
+		f := bd.read()
+		if f.Type == "deliver" {
+			if f.MsgID != "mute1" {
+				t.Fatalf("unexpected deliver: %+v", f)
+			}
+			break
+		}
+	}
+}
+
 func TestReconnectSameMachineDoesNotDeadlock(t *testing.T) {
 	e := newEnv(t)
 	alice, aTok := e.userWithToken("alice")

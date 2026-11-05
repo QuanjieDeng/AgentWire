@@ -582,6 +582,17 @@ func (h *Hub) dispatchDirect(c *Conn, f *proto.Frame, team *store.Team, to *stor
 	}
 
 	if len(matched) == 0 {
+		// A muted matching session means "hold it server-side", not "no match".
+		if f.Project != "" {
+			for _, r := range h.allSessionsFor(to.ID) {
+				if r.sess.Mode == "mute" && r.sess.Project == f.Project {
+					h.audit(c, "send", team.ID, f.MsgID, len(f.Body), "queued")
+					c.send(proto.Frame{Type: "delivery_status", MsgID: f.MsgID, Status: proto.StatusQueued,
+						Reason: "目标会话处于免打扰模式，消息已排队"})
+					return
+				}
+			}
+		}
 		if len(refs) > 0 {
 			// User is online but on other projects: do not queue, report targets.
 			projects := projectList(refs)
@@ -797,10 +808,8 @@ func (h *Hub) flushQueue(userID int64) {
 			h.st.SetMessageStatus(m.MsgID, "dispatched", false)
 		}
 		h.unclaim(m.MsgID)
-		if sent {
-			h.notifySender(m, proto.Frame{Type: "delivery_status", MsgID: m.MsgID, Status: proto.StatusDelivered,
-				FromSession: m.FromSession, Reason: "对方上线，排队消息已补投"})
-		}
+		// The recipient's ack produces the authoritative receipt; no optimistic
+		// duplicate here.
 	}
 }
 

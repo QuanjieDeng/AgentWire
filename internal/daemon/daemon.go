@@ -316,6 +316,12 @@ func (d *Daemon) handleDeliver(f proto.Frame) {
 	}
 
 	status, reason := d.inject(entry, f)
+	// The local inbox keeps both directions, even when the message was injected.
+	d.inbox.add(InboxEntry{
+		At: time.Now().Unix(), MsgID: f.MsgID, Team: f.Team, From: peerString(f.From),
+		Body: f.Body, Session: sessionID, Direction: "in",
+		Read: status == proto.StatusDelivered || status == proto.StatusHeld,
+	})
 	d.ack(f.MsgID, sessionID, status, reason)
 }
 
