@@ -6,6 +6,10 @@ AgentWire connects Claude Code sessions across **different OS users**. Claude Co
 
 > **Status**: 0.1.x. Linux wake/inbox/mute injection has been verified against a real Claude Code 2.1.317 session; Windows is cross-compiled but not yet validated on hardware.
 
+[![AgentWire architecture](docs/architecture.png)](https://htmlpreview.github.io/?https://github.com/QuanjieDeng/AgentWire/blob/master/docs/architecture.html)
+
+> Click the diagram for the interactive version; static image: [docs/architecture.png](docs/architecture.png).
+
 Messages are always delivered as an ordinary user message. AgentWire cannot approve permissions, change session settings, or trigger tool calls on the target session.
 
 Full documentation (Chinese): [README.md](README.md) · Design: [SPEC.md](SPEC.md)

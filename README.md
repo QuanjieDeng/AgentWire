@@ -15,6 +15,10 @@ Claude Code 自带的跨会话消息只在同一个系统用户内有效。Agent
 
 > **状态**：0.1.x。Linux 端的 `wake` / `inbox` / `mute` 已在真实 Claude Code 2.1.317 会话上完成注入与唤醒验证；Windows 仅完成交叉编译，尚未实机验证。
 
+[![AgentWire 功能架构](docs/architecture.png)](https://htmlpreview.github.io/?https://github.com/QuanjieDeng/AgentWire/blob/master/docs/architecture.html)
+
+> 点击架构图查看可交互版本；静态大图见 [docs/architecture.png](docs/architecture.png)。
+
 详细设计见 [SPEC.md](SPEC.md)。
 
 ---
