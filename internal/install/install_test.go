@@ -18,7 +18,7 @@ func TestInstallHookIsIdempotentAndPreservesSettings(t *testing.T) {
 	}`), 0o600)
 
 	for i := 0; i < 2; i++ {
-		if err := installHook("/usr/local/bin/teamconnect"); err != nil {
+		if err := installHook("/usr/local/bin/agentwire"); err != nil {
 			t.Fatalf("install %d: %v", i, err)
 		}
 	}
@@ -47,8 +47,8 @@ func TestInstallHookIsIdempotentAndPreservesSettings(t *testing.T) {
 	if commands["existing-hook"] != 1 {
 		t.Fatalf("existing hook changed: %+v", commands)
 	}
-	want := `"/usr/local/bin/teamconnect" hook-prompt-submit`
+	want := `"/usr/local/bin/agentwire" hook-prompt-submit`
 	if commands[want] != 1 {
-		t.Fatalf("teamconnect hook should appear exactly once, got %+v", commands)
+		t.Fatalf("agentwire hook should appear exactly once, got %+v", commands)
 	}
 }

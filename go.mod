@@ -1,4 +1,4 @@
-module github.com/dengquanjie/teamconnect
+module github.com/dengquanjie/agentwire
 
 go 1.26.0
 

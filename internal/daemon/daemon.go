@@ -18,7 +18,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/dengquanjie/teamconnect/internal/proto"
+	"github.com/dengquanjie/agentwire/internal/proto"
 )
 
 type Config struct {
@@ -35,18 +35,18 @@ func DefaultConfigPath() string {
 	if err != nil {
 		dir = "."
 	}
-	return filepath.Join(dir, "teamconnect", "config.json")
+	return filepath.Join(dir, "agentwire", "config.json")
 }
 
 func DefaultStateDir() string {
 	if x := os.Getenv("XDG_STATE_HOME"); x != "" {
-		return filepath.Join(x, "teamconnect")
+		return filepath.Join(x, "agentwire")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(os.TempDir(), "teamconnect-state")
+		return filepath.Join(os.TempDir(), "agentwire-state")
 	}
-	return filepath.Join(home, ".local", "state", "teamconnect")
+	return filepath.Join(home, ".local", "state", "agentwire")
 }
 
 func DefaultSessionsDir() string {
@@ -60,7 +60,7 @@ func DefaultSessionsDir() string {
 func LoadConfig() (Config, error) {
 	b, err := os.ReadFile(DefaultConfigPath())
 	if err != nil {
-		return Config{}, fmt.Errorf("读取配置失败（先运行 teamconnect login）：%w", err)
+		return Config{}, fmt.Errorf("读取配置失败（先运行 agentwire login）：%w", err)
 	}
 	var cfg Config
 	if err := json.Unmarshal(b, &cfg); err != nil {

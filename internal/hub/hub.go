@@ -1,4 +1,4 @@
-// Package hub implements the central TeamConnect service: WebSocket daemon
+// Package hub implements the central AgentWire service: WebSocket daemon
 // protocol, routing, presence, offline queue, and the admin HTTP API.
 package hub
 
@@ -20,8 +20,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/dengquanjie/teamconnect/internal/proto"
-	"github.com/dengquanjie/teamconnect/internal/store"
+	"github.com/dengquanjie/agentwire/internal/proto"
+	"github.com/dengquanjie/agentwire/internal/store"
 )
 
 const (
@@ -113,7 +113,7 @@ func (h *Hub) Serve(ctx context.Context) error {
 		defer cancel()
 		srv.Shutdown(shutdownCtx)
 	}()
-	log.Printf("TeamConnect hub listening on %s", h.cfg.Addr)
+	log.Printf("AgentWire hub listening on %s", h.cfg.Addr)
 	err := srv.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil

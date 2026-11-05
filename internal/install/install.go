@@ -36,13 +36,13 @@ func Install(opts Options) error {
 	if opts.Project {
 		scope = "project"
 	}
-	args := []string{"mcp", "add", "-s", scope, "teamconnect", "--", exe, "mcp"}
+	args := []string{"mcp", "add", "-s", scope, "agentwire", "--", exe, "mcp"}
 	cmd := exec.Command("claude", args...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("注册 MCP 失败（请确认 claude 在 PATH 中）：%w", err)
 	}
-	fmt.Printf("MCP 已注册（scope=%s）：teamconnect -> %s mcp\n", scope, exe)
+	fmt.Printf("MCP 已注册（scope=%s）：agentwire -> %s mcp\n", scope, exe)
 
 	if err := installHook(exe); err != nil {
 		return fmt.Errorf("安装 UserPromptSubmit hook 失败：%w", err)
@@ -111,7 +111,7 @@ func installService(exe string) error {
 	case "linux":
 		return installSystemdUser(exe)
 	case "windows":
-		fmt.Println("Windows 自启动：请在登录时运行 `schtasks /create /sc onlogon /tn TeamConnectDaemon /tr \"\\\"" + exe + "\\\" daemon\"`")
+		fmt.Println("Windows 自启动：请在登录时运行 `schtasks /create /sc onlogon /tn AgentWireDaemon /tr \"\\\"" + exe + "\\\" daemon\"`")
 		return nil
 	default:
 		return fmt.Errorf("当前平台 %s 未实现自启动", runtime.GOOS)
@@ -129,7 +129,7 @@ func installSystemdUser(exe string) error {
 	}
 	unit := strings.Join([]string{
 		"[Unit]",
-		"Description=TeamConnect local daemon",
+		"Description=AgentWire local daemon",
 		"After=network.target",
 		"",
 		"[Service]",
@@ -141,14 +141,14 @@ func installSystemdUser(exe string) error {
 		"WantedBy=default.target",
 		"",
 	}, "\n")
-	if err := os.WriteFile(filepath.Join(unitDir, "teamconnect-daemon.service"), []byte(unit), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(unitDir, "agentwire-daemon.service"), []byte(unit), 0o644); err != nil {
 		return err
 	}
 	if err := exec.Command("systemctl", "--user", "daemon-reload").Run(); err != nil {
 		return fmt.Errorf("systemd 不可用，已写入 unit，请手动启用：%w", err)
 	}
-	if err := exec.Command("systemctl", "--user", "enable", "--now", "teamconnect-daemon.service").Run(); err != nil {
-		return fmt.Errorf("已写入 unit，但启用失败，请手动执行 systemctl --user enable --now teamconnect-daemon：%w", err)
+	if err := exec.Command("systemctl", "--user", "enable", "--now", "agentwire-daemon.service").Run(); err != nil {
+		return fmt.Errorf("已写入 unit，但启用失败，请手动执行 systemctl --user enable --now agentwire-daemon：%w", err)
 	}
 	return nil
 }

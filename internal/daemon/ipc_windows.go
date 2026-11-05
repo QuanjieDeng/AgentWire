@@ -24,7 +24,7 @@ func ipcSocketPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return `\\.\pipe\teamconnect-` + sid, nil
+	return `\\.\pipe\agentwire-` + sid, nil
 }
 
 func listenIPC(path string) (net.Listener, error) {

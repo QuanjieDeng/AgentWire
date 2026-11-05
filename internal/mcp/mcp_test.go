@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dengquanjie/teamconnect/internal/daemon"
+	"github.com/dengquanjie/agentwire/internal/daemon"
 )
 
 type rpcOut struct {
@@ -58,7 +58,7 @@ func TestToolsList(t *testing.T) {
 		} `json:"serverInfo"`
 	}
 	json.Unmarshal(resps[0].Result, &init)
-	if init.ProtocolVersion != "2024-11-05" || init.ServerInfo.Name != "teamconnect" {
+	if init.ProtocolVersion != "2024-11-05" || init.ServerInfo.Name != "agentwire" {
 		t.Fatalf("bad initialize result: %+v", init)
 	}
 
@@ -72,7 +72,7 @@ func TestToolsList(t *testing.T) {
 	for _, tool := range list.Tools {
 		names[tool.Name] = true
 	}
-	for _, want := range []string{"tc_members", "tc_send", "tc_broadcast", "tc_mode", "tc_inbox"} {
+	for _, want := range []string{"agent_members", "agent_send", "agent_broadcast", "agent_mode", "agent_inbox"} {
 		if !names[want] {
 			t.Fatalf("missing tool %s in %+v", want, names)
 		}
@@ -85,7 +85,7 @@ func TestSendForwardsToDaemonAndReturnsStatus(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "sess-1")
 	t.Setenv("CLAUDE_PID", "4242")
 
-	sockDir := filepath.Join(dir, "teamconnect")
+	sockDir := filepath.Join(dir, "agentwire")
 	if err := os.MkdirAll(sockDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestSendForwardsToDaemonAndReturnsStatus(t *testing.T) {
 	}()
 
 	resps := runMCP(t,
-		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"tc_send","arguments":{"to":"bob","text":"hi","project":"backend"}}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"agent_send","arguments":{"to":"bob","text":"hi","project":"backend"}}}`,
 	)
 	if len(resps) != 1 || resps[0].Error != nil {
 		t.Fatalf("bad response: %+v", resps)
@@ -151,7 +151,7 @@ func TestSendForwardsToDaemonAndReturnsStatus(t *testing.T) {
 
 func TestSendMissingArgsReturnsToolError(t *testing.T) {
 	resps := runMCP(t,
-		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"tc_send","arguments":{"text":"hi"}}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"agent_send","arguments":{"text":"hi"}}}`,
 	)
 	var result struct {
 		IsError bool `json:"isError"`
@@ -165,7 +165,7 @@ func TestSendMissingArgsReturnsToolError(t *testing.T) {
 func TestDaemonDownReturnsToolError(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	resps := runMCP(t,
-		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"tc_inbox","arguments":{}}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"agent_inbox","arguments":{}}}`,
 	)
 	var result struct {
 		IsError bool `json:"isError"`

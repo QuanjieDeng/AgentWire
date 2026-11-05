@@ -92,7 +92,7 @@ function Login({ onLogin }: { onLogin: (u: User) => void }) {
           }
         }}
       >
-        <h1>TeamConnect</h1>
+        <h1>AgentWire</h1>
         <p className="muted">团队 Claude 会话通信管理后台</p>
         <label>
           用户名
@@ -172,7 +172,7 @@ function Console({ user, onLogout }: { user: User; onLogout: () => void }) {
   return (
     <div className="layout">
       <aside>
-        <h2>TeamConnect</h2>
+        <h2>AgentWire</h2>
         <p className="muted small">
           {user.username} · {user.role === "admin" ? "平台管理员" : "成员"}
         </p>
@@ -521,7 +521,7 @@ function Tokens() {
   return (
     <section>
       <h1>我的 Token</h1>
-      <p className="muted small">用于 teamconnect daemon 接入中心服务。token 只在创建时展示一次。</p>
+      <p className="muted small">用于 agentwire daemon 接入中心服务。token 只在创建时展示一次。</p>
       {error && <p className="error">{error}</p>}
       <button
         onClick={async () => {

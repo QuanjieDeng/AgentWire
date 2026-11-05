@@ -1,4 +1,4 @@
-// Package mcp exposes the TeamConnect tools over the Model Context Protocol
+// Package mcp exposes the AgentWire tools over the Model Context Protocol
 // stdio transport, proxying calls to the local daemon.
 package mcp
 
@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dengquanjie/teamconnect/internal/daemon"
+	"github.com/dengquanjie/agentwire/internal/daemon"
 )
 
 type Server struct {
@@ -94,7 +94,7 @@ func (s *Server) initialize(params json.RawMessage) map[string]any {
 	return map[string]any{
 		"protocolVersion": version,
 		"capabilities":    map[string]any{"tools": map[string]any{}},
-		"serverInfo":      map[string]any{"name": "teamconnect", "version": ver},
+		"serverInfo":      map[string]any{"name": "agentwire", "version": ver},
 	}
 }
 
@@ -105,12 +105,12 @@ func toolDefs() []map[string]any {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 	return []map[string]any{
 		{
-			"name":        "tc_members",
+			"name":        "agent_members",
 			"description": "列出团队成员及其在线会话（项目、空闲/忙碌、接收模式）。不指定 team 时使用唯一共享 team。",
 			"inputSchema": obj(map[string]any{"team": str("team 名称，可选")}),
 		},
 		{
-			"name":        "tc_send",
+			"name":        "agent_send",
 			"description": "给某位同事发送一条消息，非阻塞，返回 msg_id 与投递状态。",
 			"inputSchema": obj(map[string]any{
 				"to":      str("收件人用户名"),
@@ -120,7 +120,7 @@ func toolDefs() []map[string]any {
 			}, "to", "text"),
 		},
 		{
-			"name":        "tc_broadcast",
+			"name":        "agent_broadcast",
 			"description": "向 team 内所有在线会话广播一条消息。",
 			"inputSchema": obj(map[string]any{
 				"text": str("消息正文，最长 8 KB"),
@@ -128,14 +128,14 @@ func toolDefs() []map[string]any {
 			}, "text"),
 		},
 		{
-			"name":        "tc_mode",
+			"name":        "agent_mode",
 			"description": "设置当前会话的接收模式：wake（立即唤醒，默认）、inbox（只收件，不唤醒）、mute（免打扰，服务端排队）。",
 			"inputSchema": obj(map[string]any{
 				"mode": map[string]any{"type": "string", "enum": []string{"wake", "inbox", "mute"}, "description": "接收模式"},
 			}, "mode"),
 		},
 		{
-			"name":        "tc_inbox",
+			"name":        "agent_inbox",
 			"description": "查看当前会话在本机保留的收发记录（最近 50 条，不上传服务端）。",
 			"inputSchema": obj(map[string]any{}),
 		},
@@ -169,32 +169,32 @@ func (s *Server) toolsCall(params json.RawMessage) (map[string]any, error) {
 	}
 
 	switch p.Name {
-	case "tc_members":
+	case "agent_members":
 		req.Op = "members"
 		req.Team = get("team")
-	case "tc_send":
+	case "agent_send":
 		req.Op = "send"
 		req.To = get("to")
 		req.Text = get("text")
 		req.Team = get("team")
 		req.Project = get("project")
 		if req.To == "" || req.Text == "" {
-			return nil, fmt.Errorf("tc_send 需要 to 与 text")
+			return nil, fmt.Errorf("agent_send 需要 to 与 text")
 		}
-	case "tc_broadcast":
+	case "agent_broadcast":
 		req.Op = "broadcast"
 		req.Text = get("text")
 		req.Team = get("team")
 		if req.Text == "" {
-			return nil, fmt.Errorf("tc_broadcast 需要 text")
+			return nil, fmt.Errorf("agent_broadcast 需要 text")
 		}
-	case "tc_mode":
+	case "agent_mode":
 		req.Op = "mode"
 		req.Mode = get("mode")
 		if req.Mode != "wake" && req.Mode != "inbox" && req.Mode != "mute" {
 			return nil, fmt.Errorf("mode 只能是 wake、inbox 或 mute")
 		}
-	case "tc_inbox":
+	case "agent_inbox":
 		req.Op = "inbox"
 	default:
 		return nil, fmt.Errorf("未知工具：%s", p.Name)
@@ -219,7 +219,7 @@ func (s *Server) toolsCall(params json.RawMessage) (map[string]any, error) {
 func callDaemon(req daemon.IPCRequest) (daemon.IPCResponse, error) {
 	conn, err := daemon.DialLocal()
 	if err != nil {
-		return daemon.IPCResponse{}, fmt.Errorf("连接本机 daemon 失败（请确认 teamconnect daemon 正在运行）：%w", err)
+		return daemon.IPCResponse{}, fmt.Errorf("连接本机 daemon 失败（请确认 agentwire daemon 正在运行）：%w", err)
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(12 * time.Second))

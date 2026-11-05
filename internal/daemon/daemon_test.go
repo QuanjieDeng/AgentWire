@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dengquanjie/teamconnect/internal/proto"
+	"github.com/dengquanjie/agentwire/internal/proto"
 )
 
 type fakePeer struct {
@@ -113,15 +113,15 @@ func TestInjectWritesAuthAndUserFrames(t *testing.T) {
 	content := msg.Message.Content
 	for _, want := range []string{
 		`from="alice/a1"`, `team="proj"`, `trust="cross-user"`, `msg_id="m1"`,
-		"hello <world> & friends", "</teamconnect-message>",
+		"hello <world> & friends", "</agentwire-message>",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("envelope missing %q:\n%s", want, content)
 		}
 	}
-	tc, _ := msg.Meta["teamconnect"].(map[string]any)
+	tc, _ := msg.Meta["agentwire"].(map[string]any)
 	if tc == nil || tc["trust"] != "cross-user" {
-		t.Fatalf("missing teamconnect meta: %+v", msg.Meta)
+		t.Fatalf("missing agentwire meta: %+v", msg.Meta)
 	}
 	if notice, _ := tc["notice"].(string); !strings.Contains(notice, "危险操作") {
 		t.Fatalf("meta notice missing safety wording: %q", notice)

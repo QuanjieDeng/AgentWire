@@ -13,9 +13,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/dengquanjie/teamconnect/internal/hub"
-	"github.com/dengquanjie/teamconnect/internal/proto"
-	"github.com/dengquanjie/teamconnect/internal/store"
+	"github.com/dengquanjie/agentwire/internal/hub"
+	"github.com/dengquanjie/agentwire/internal/proto"
+	"github.com/dengquanjie/agentwire/internal/store"
 )
 
 type env struct {

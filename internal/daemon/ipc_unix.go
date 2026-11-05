@@ -15,7 +15,7 @@ func ipcSocketPath() (string, error) {
 	if dir == "" {
 		dir = os.TempDir()
 	}
-	base := filepath.Join(dir, "teamconnect")
+	base := filepath.Join(dir, "agentwire")
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		return "", err
 	}

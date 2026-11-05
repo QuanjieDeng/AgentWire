@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dengquanjie/teamconnect/internal/store"
+	"github.com/dengquanjie/agentwire/internal/store"
 )
 
-const adminCookie = "tc_session"
+const adminCookie = "agent_session"
 
 type loginState struct {
 	count       int

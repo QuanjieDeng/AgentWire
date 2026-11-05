@@ -10,7 +10,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/dengquanjie/teamconnect/internal/proto"
+	"github.com/dengquanjie/agentwire/internal/proto"
 )
 
 // IPCRequest is a local request from the MCP bridge to this daemon.
