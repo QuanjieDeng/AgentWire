@@ -674,6 +674,7 @@ find /var/backups -name 'agentwire-*.db' -mtime +7 -delete
 | Windows 命名管道连不上 | 确认 daemon 以**目标用户**身份运行（ACL 只允许该 SID） |
 | hook 没有附加 inbox | 确认 `~/.claude/settings.json` 中有 `UserPromptSubmit` hook；`install` 可幂等补装 |
 | `npm ci` 报 `EBADENGINE`，或 `npm run build` 报 `Unexpected token '?'` | Node 版本 < 18。仓库已带前端产物，直接 `go build` 即可；要改前端请升级到 Node 20+ |
+| `install` 提示 `systemd 不可用` / `exit status 1` | MCP 与 hook 已安装成功，只是当前用户没有可用的 `systemd --user` 会话。直接 `agentwire daemon` 常驻即可；需要开机自启动则执行 `loginctl enable-linger $USER` 后重试 `systemctl --user enable --now agentwire-daemon` |
 
 查看日志：
 

@@ -112,7 +112,7 @@ func installService(exe string) error {
 		return installSystemdUser(exe)
 	case "windows":
 		fmt.Println("Windows 自启动：请在登录时运行 `schtasks /create /sc onlogon /tn AgentWireDaemon /tr \"\\\"" + exe + "\\\" daemon\"`")
-		return nil
+		return fmt.Errorf("未自动注册，请在登录时执行上方 schtasks 命令")
 	default:
 		return fmt.Errorf("当前平台 %s 未实现自启动", runtime.GOOS)
 	}
@@ -141,16 +141,33 @@ func installSystemdUser(exe string) error {
 		"WantedBy=default.target",
 		"",
 	}, "\n")
-	if err := os.WriteFile(filepath.Join(unitDir, "agentwire-daemon.service"), []byte(unit), 0o644); err != nil {
+	unitPath := filepath.Join(unitDir, "agentwire-daemon.service")
+	if err := os.WriteFile(unitPath, []byte(unit), 0o644); err != nil {
 		return err
 	}
-	if err := exec.Command("systemctl", "--user", "daemon-reload").Run(); err != nil {
-		return fmt.Errorf("systemd 不可用，已写入 unit，请手动启用：%w", err)
+	if out, err := exec.Command("systemctl", "--user", "daemon-reload").CombinedOutput(); err != nil {
+		return fmt.Errorf("无法连接 systemd 用户会话（%s）。unit 已写入 %s；请手动运行 `%s daemon` 常驻（需先 agentwire login）。如需 systemd --user，请先启用 linger：loginctl enable-linger %s，再重试",
+			cmdDetail(out, err), unitPath, exe, currentUser())
 	}
-	if err := exec.Command("systemctl", "--user", "enable", "--now", "agentwire-daemon.service").Run(); err != nil {
-		return fmt.Errorf("已写入 unit，但启用失败，请手动执行 systemctl --user enable --now agentwire-daemon：%w", err)
+	if out, err := exec.Command("systemctl", "--user", "enable", "--now", "agentwire-daemon.service").CombinedOutput(); err != nil {
+		return fmt.Errorf("unit 已写入 %s，但启用失败（%s）。请手动运行 `%s daemon`，或执行 `systemctl --user enable --now agentwire-daemon` 查看详细原因",
+			unitPath, cmdDetail(out, err), exe)
 	}
 	return nil
+}
+
+func cmdDetail(out []byte, err error) string {
+	if s := strings.TrimSpace(string(out)); s != "" {
+		return s
+	}
+	return err.Error()
+}
+
+func currentUser() string {
+	if u := os.Getenv("USER"); u != "" {
+		return u
+	}
+	return os.Getenv("LOGNAME")
 }
 
 // PromptPassword reads a password from the terminal without echoing it.

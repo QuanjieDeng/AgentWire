@@ -70,6 +70,11 @@ cd web && npm ci && npm run build && cd ..
 > `EBADENGINE` or `SyntaxError: Unexpected token '?'` means Node is older than 18.
 > Skip the frontend build and use the committed `dist`, or upgrade to Node 20 LTS.
 
+If `install` warns that `systemctl --user` is unavailable (exit status 1), the MCP server
+and hook are still installed; only daemon autostart failed. Run `agentwire daemon` in a
+persistent terminal, or enable lingering (`loginctl enable-linger $USER`) and retry
+`systemctl --user enable --now agentwire-daemon`.
+
 ## Quick start (hub + first user)
 
 ```bash
