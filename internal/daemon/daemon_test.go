@@ -175,6 +175,17 @@ func TestInboxModeStoresWithoutInjecting(t *testing.T) {
 	}
 }
 
+func TestAsyncDeliveryReceiptLandsInInbox(t *testing.T) {
+	d := testDaemon(t)
+	d.registry = map[string]registryEntry{"s1": {Pid: 1, SessionID: "s1"}}
+	d.recordReceipt(proto.Frame{Type: "delivery_status", MsgID: "m6", Status: proto.StatusExpired,
+		FromSession: "s1", Reason: "消息超过 7 天未投递，已过期"})
+	entries := d.inbox.list("s1", 10)
+	if len(entries) != 1 || entries[0].Direction != "system" || !strings.Contains(entries[0].Body, "过期") {
+		t.Fatalf("receipt not recorded: %+v", entries)
+	}
+}
+
 func TestMuteModeLeavesMessageQueued(t *testing.T) {
 	d := testDaemon(t)
 	d.registry = map[string]registryEntry{"s1": {Pid: 1, SessionID: "s1"}}

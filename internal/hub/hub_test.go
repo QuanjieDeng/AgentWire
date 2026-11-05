@@ -503,6 +503,11 @@ func TestFirstLoginMustChangePassword(t *testing.T) {
 	}
 
 	newbie := e.loginClient("newbie", created.Password)
+	// /api/me stays available so the UI can render the forced-change screen.
+	status, body = doJSON(t, newbie, "GET", e.srv.URL+"/api/me", "")
+	if status != 200 || !strings.Contains(string(body), "must_change_password") {
+		t.Fatalf("/api/me should be reachable before password change: %d %s", status, body)
+	}
 	status, body = doJSON(t, newbie, "GET", e.srv.URL+"/api/teams", "")
 	if status != 403 || !strings.Contains(string(body), "password_change_required") {
 		t.Fatalf("expected forced password change, got %d %s", status, body)
@@ -559,6 +564,50 @@ func TestInviteJoinAndOwnerOnly(t *testing.T) {
 	status, body = doJSON(t, bob, "GET", e.srv.URL+"/api/teams", "")
 	if status != 200 || !strings.Contains(string(body), `"proj"`) {
 		t.Fatalf("bob should see joined team: %d %s", status, body)
+	}
+}
+
+func TestReplyWorksAfterWelcomeWriteDeadline(t *testing.T) {
+	e := newEnv(t)
+	alice, aTok := e.userWithToken("alice")
+	e.team("proj", alice)
+	d := e.connect(aTok, "m")
+	// The welcome frame sets a 5s write deadline; a later reply must refresh it.
+	time.Sleep(11 * time.Second)
+	d.send(proto.Frame{Type: "members", MsgID: "late", Team: "proj"})
+	f := d.read()
+	if f.Type != "members_result" || f.MsgID != "late" {
+		t.Fatalf("reply after 6s failed: %+v", f)
+	}
+}
+
+func TestArchivedTeamRejectsMessagesAndInvites(t *testing.T) {
+	e := newEnv(t)
+	alice, aTok := e.userWithToken("alice")
+	bob, bTok := e.userWithToken("bob")
+	tm := e.team("proj", alice, bob)
+	ad := e.connect(aTok, "ma")
+	bd := e.connect(bTok, "mb")
+	ad.send(proto.Frame{Type: "heartbeat", Sessions: []proto.Session{session("a1", "p")}})
+	bd.send(proto.Frame{Type: "heartbeat", Sessions: []proto.Session{session("b1", "p")}})
+	ad.syncHeartbeat("proj")
+	bd.syncHeartbeat("proj")
+
+	code, err := e.st.CreateInvite(tm.ID, alice.ID, time.Hour, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.ArchiveTeam(tm.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	ad.send(proto.Frame{Type: "send", MsgID: "after-archive", To: "bob", Team: "proj", Body: "x", FromSession: "a1"})
+	reply := ad.read()
+	if reply.Status != proto.StatusError {
+		t.Fatalf("archived team should reject messages: %+v", reply)
+	}
+	if _, err := e.st.UseInvite(code, bob.ID); err == nil {
+		t.Fatal("archived team should reject invites")
 	}
 }
 

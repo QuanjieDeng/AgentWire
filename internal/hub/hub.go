@@ -209,6 +209,14 @@ func (h *Hub) handleWS(w http.ResponseWriter, r *http.Request) {
 		sessions: map[string]proto.Session{},
 		lastSeen: time.Now(),
 	}
+	// Send welcome before publishing the conn, so no other goroutine can write
+	// to it concurrently.
+	if err := c.send(proto.Frame{Type: "welcome", ServerVersion: h.cfg.Version,
+		ProtocolVersion: proto.ProtocolVersion, User: user.Username}); err != nil {
+		ws.Close()
+		return
+	}
+
 	h.mu.Lock()
 	key := connKey(user.ID, machine)
 	old := h.conns[key]
@@ -218,9 +226,6 @@ func (h *Hub) handleWS(w http.ResponseWriter, r *http.Request) {
 		// close() takes h.mu itself: never call it while holding the lock.
 		old.close()
 	}
-
-	writeFrame(ws, proto.Frame{Type: "welcome", ServerVersion: h.cfg.Version,
-		ProtocolVersion: proto.ProtocolVersion, User: user.Username})
 	h.st.Audit(user.ID, "daemon_connect", 0, "", 0, "ok", c.remote)
 
 	c.readLoop()
@@ -489,6 +494,9 @@ func (h *Hub) resolveBroadcastTeam(c *Conn, name string) (*store.Team, error) {
 	if err != nil {
 		return nil, fmt.Errorf("找不到 team %q", name)
 	}
+	if t.Status != "active" {
+		return nil, fmt.Errorf("team %q 已归档", name)
+	}
 	ok, _, err := h.st.IsMember(t.ID, c.user.ID)
 	if err != nil {
 		return nil, err
@@ -504,6 +512,9 @@ func (h *Hub) resolveTeam(fromID, toID int64, name string) (*store.Team, error) 
 		t, err := h.st.TeamByName(name)
 		if err != nil {
 			return nil, fmt.Errorf("找不到 team %q", name)
+		}
+		if t.Status != "active" {
+			return nil, fmt.Errorf("team %q 已归档", name)
 		}
 		for _, uid := range []int64{fromID, toID} {
 			ok, _, err := h.st.IsMember(t.ID, uid)
@@ -589,7 +600,14 @@ func (h *Hub) dispatchDirect(c *Conn, f *proto.Frame, team *store.Team, to *stor
 	}
 
 	target := pickBest(matched)[0]
-	h.sendToSession(msg, team, target, &proto.Peer{User: c.user.Username, Machine: c.machine, Session: f.FromSession})
+	if !h.sendToSession(msg, team, target, &proto.Peer{User: c.user.Username, Machine: c.machine, Session: f.FromSession}) {
+		// Do not claim delivery we did not achieve: keep it queued for retry.
+		h.st.SetMessageStatus(f.MsgID, proto.StatusQueued, false)
+		h.audit(c, "send", team.ID, f.MsgID, len(f.Body), "queued")
+		c.send(proto.Frame{Type: "delivery_status", MsgID: f.MsgID, Status: proto.StatusQueued,
+			Reason: "目标会话暂时不可达，消息已排队"})
+		return
+	}
 	h.st.SetMessageStatus(f.MsgID, "dispatched", false)
 	h.audit(c, "send", team.ID, f.MsgID, len(f.Body), "dispatched")
 	c.send(proto.Frame{Type: "delivery_status", MsgID: f.MsgID, Status: proto.StatusDelivered,
@@ -607,10 +625,25 @@ func (h *Hub) sendToSession(msg *store.Message, team *store.Team, ref sessionRef
 		return false
 	}
 	h.st.AddDelivery(msg.MsgID, ref.conn.user.ID, ref.conn.machine, ref.sess.ID, "dispatched")
-	h.mu.Lock()
-	h.dispatched[msg.MsgID] = true
-	h.mu.Unlock()
 	return true
+}
+
+// claim marks a queued message in flight so concurrent flushes of the same
+// user cannot deliver it twice. Callers must unclaim when done.
+func (h *Hub) claim(msgID string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.dispatched[msgID] {
+		return false
+	}
+	h.dispatched[msgID] = true
+	return true
+}
+
+func (h *Hub) unclaim(msgID string) {
+	h.mu.Lock()
+	delete(h.dispatched, msgID)
+	h.mu.Unlock()
 }
 
 func (h *Hub) dispatchBroadcast(c *Conn, f *proto.Frame, team *store.Team) {
@@ -668,15 +701,18 @@ func (h *Hub) handleAck(c *Conn, f *proto.Frame) {
 		log.Printf("ack: %v", err)
 		return
 	}
-	h.st.SetMessageStatus(f.MsgID, status, status == proto.StatusDelivered || status == proto.StatusHeld)
+	msg, _ := h.st.MessageByID(f.MsgID)
+	// A broadcast has one status row but many recipients; a single ack must not
+	// stamp the whole broadcast.
+	if msg != nil && msg.ToUser != nil {
+		h.st.SetMessageStatus(f.MsgID, status, status == proto.StatusDelivered || status == proto.StatusHeld)
+	}
 	h.st.Audit(c.user.ID, "ack", 0, f.MsgID, 0, status, c.remote)
 
-	if n == 0 {
+	if n == 0 && msg != nil {
 		// Last delivery resolved; tell the sender what really happened.
-		if msg, err := h.st.MessageByID(f.MsgID); err == nil {
-			h.notifySender(msg, proto.Frame{Type: "delivery_status", MsgID: f.MsgID, Status: status,
-				Reason: f.Reason, DeliveredTo: deliveryTargets(h, f.MsgID)})
-		}
+		h.notifySender(msg, proto.Frame{Type: "delivery_status", MsgID: f.MsgID, Status: status,
+			Reason: f.Reason, DeliveredTo: deliveryTargets(h, f.MsgID), FromSession: msg.FromSession})
 	}
 }
 
@@ -729,6 +765,9 @@ func (h *Hub) flushQueue(userID int64) {
 	}
 	for i := range msgs {
 		m := &msgs[i]
+		if !h.claim(m.MsgID) {
+			continue
+		}
 		matched := refs
 		if m.Project != "" {
 			matched = nil
@@ -739,10 +778,12 @@ func (h *Hub) flushQueue(userID int64) {
 			}
 		}
 		if len(matched) == 0 {
+			h.unclaim(m.MsgID)
 			continue
 		}
 		team, err := h.st.TeamByID(m.TeamID)
 		if err != nil {
+			h.unclaim(m.MsgID)
 			continue
 		}
 		target := pickBest(matched)[0]
@@ -751,10 +792,14 @@ func (h *Hub) flushQueue(userID int64) {
 		if from != nil {
 			name = from.Username
 		}
-		if h.sendToSession(m, team, target, &proto.Peer{User: name, Machine: m.FromMachine, Session: m.FromSession}) {
+		sent := h.sendToSession(m, team, target, &proto.Peer{User: name, Machine: m.FromMachine, Session: m.FromSession})
+		if sent {
 			h.st.SetMessageStatus(m.MsgID, "dispatched", false)
+		}
+		h.unclaim(m.MsgID)
+		if sent {
 			h.notifySender(m, proto.Frame{Type: "delivery_status", MsgID: m.MsgID, Status: proto.StatusDelivered,
-				Reason: "对方上线，排队消息已补投"})
+				FromSession: m.FromSession, Reason: "对方上线，排队消息已补投"})
 		}
 	}
 }
@@ -799,7 +844,7 @@ func (h *Hub) expireQueued() {
 	for _, m := range msgs {
 		h.st.Audit(m.FromUser, "expire", m.TeamID, m.MsgID, len(m.Body), "expired", "")
 		h.notifySender(&m, proto.Frame{Type: "delivery_status", MsgID: m.MsgID, Status: proto.StatusExpired,
-			Reason: "消息超过 7 天未投递，已过期"})
+			FromSession: m.FromSession, Reason: "消息超过 7 天未投递，已过期"})
 	}
 }
 
@@ -809,12 +854,12 @@ func (h *Hub) sendErr(c *Conn, f *proto.Frame, err error) {
 	code := proto.ErrBadRequest
 	msg := err.Error()
 	switch {
-	case strings.Contains(msg, "team"):
-		code = proto.ErrNoTeam
 	case strings.Contains(msg, "找不到用户"):
 		code = proto.ErrNotFound
 	case strings.Contains(msg, "跨 team"):
 		code = proto.ErrForbidden
+	case strings.Contains(msg, "team"):
+		code = proto.ErrNoTeam
 	}
 	c.send(proto.Frame{Type: "delivery_status", MsgID: f.MsgID, Status: proto.StatusError, Code: code, Message: msg})
 }

@@ -133,7 +133,7 @@ func installSystemdUser(exe string) error {
 		"After=network.target",
 		"",
 		"[Service]",
-		"ExecStart=" + exe + " daemon",
+		`ExecStart="` + exe + `" daemon`,
 		"Restart=on-failure",
 		"RestartSec=5",
 		"",

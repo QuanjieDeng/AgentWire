@@ -138,9 +138,12 @@ func (d *Daemon) Run(ctx context.Context) error {
 
 	backoff := time.Second
 	for ctx.Err() == nil {
-		err := d.connectAndServe(ctx)
+		connected, err := d.connectAndServe(ctx)
 		if ctx.Err() != nil {
 			return nil
+		}
+		if connected {
+			backoff = time.Second
 		}
 		log.Printf("与中心服务断开：%v；%s 后重连", err, backoff)
 		select {
@@ -164,31 +167,32 @@ func (d *Daemon) selfCheck() {
 	}
 }
 
-func (d *Daemon) connectAndServe(ctx context.Context) error {
+func (d *Daemon) connectAndServe(ctx context.Context) (connected bool, err error) {
 	url := wsURL(d.cfg.Server)
 	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
 	ws, _, err := dialer.DialContext(ctx, url, nil)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer ws.Close()
 
 	if err := d.writeFrame(ws, proto.Frame{Type: "hello", Token: d.cfg.Token, Machine: d.cfg.Machine,
 		DaemonVersion: d.cfg.Version, ProtocolVersion: proto.ProtocolVersion}); err != nil {
-		return err
+		return false, err
 	}
 	_ = ws.SetReadDeadline(time.Now().Add(10 * time.Second))
 	var reply proto.Frame
 	if err := ws.ReadJSON(&reply); err != nil {
-		return err
+		return false, err
 	}
 	if reply.Type == "error" {
-		return fmt.Errorf("中心服务拒绝连接：%s %s", reply.Code, reply.Message)
+		return false, fmt.Errorf("中心服务拒绝连接：%s %s", reply.Code, reply.Message)
 	}
 	if reply.Type != "welcome" {
-		return fmt.Errorf("中心服务返回了意外首帧 %q", reply.Type)
+		return false, fmt.Errorf("中心服务返回了意外首帧 %q", reply.Type)
 	}
 	_ = ws.SetReadDeadline(time.Time{})
+	connected = true
 	log.Printf("已连接中心服务 %s（用户 %s，机器 %s）", d.cfg.Server, reply.User, d.cfg.Machine)
 
 	d.mu.Lock()
@@ -225,12 +229,17 @@ func (d *Daemon) connectAndServe(ctx context.Context) error {
 	for {
 		var f proto.Frame
 		if err := ws.ReadJSON(&f); err != nil {
-			return err
+			return connected, err
 		}
 		switch f.Type {
 		case "deliver":
-			go d.handleDeliver(f)
-		case "delivery_status", "members_result":
+			// Serial on purpose: preserves sender order per SPEC.
+			d.handleDeliver(f)
+		case "delivery_status":
+			if !d.completePending(f) {
+				d.recordReceipt(f)
+			}
+		case "members_result":
 			d.completePending(f)
 		case "error":
 			log.Printf("中心服务错误：%s %s", f.Code, f.Message)
@@ -361,17 +370,43 @@ func (d *Daemon) request(f proto.Frame, timeout time.Duration) (proto.Frame, err
 	}
 }
 
-func (d *Daemon) completePending(f proto.Frame) {
+// completePending wakes an in-flight IPC request. It reports whether one was waiting.
+func (d *Daemon) completePending(f proto.Frame) bool {
 	d.mu.Lock()
 	ch := d.pending[f.MsgID]
 	d.mu.Unlock()
 	if ch == nil {
-		return
+		return false
 	}
 	select {
 	case ch <- f:
 	default:
 	}
+	return true
+}
+
+// recordReceipt surfaces asynchronous delivery outcomes (queued message was
+// delivered later, or expired) to the sending session's local inbox.
+func (d *Daemon) recordReceipt(f proto.Frame) {
+	session := f.FromSession
+	if session == "" {
+		d.mu.Lock()
+		if len(d.registry) == 1 {
+			for id := range d.registry {
+				session = id
+			}
+		}
+		d.mu.Unlock()
+	}
+	reason := f.Reason
+	if reason == "" {
+		reason = f.Message
+	}
+	log.Printf("投递回执 %s：%s（msg_id=%s）", f.Status, reason, f.MsgID)
+	d.inbox.add(InboxEntry{
+		At: time.Now().Unix(), MsgID: f.MsgID, Body: "投递回执：" + f.Status + " " + reason,
+		Session: session, Direction: "system", Read: true,
+	})
 }
 
 // ---------- session discovery ----------

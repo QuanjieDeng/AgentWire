@@ -260,6 +260,11 @@ func (s *Store) SetUserStatus(id int64, status string) error {
 	return err
 }
 
+func (s *Store) SetUserRole(id int64, role string) error {
+	_, err := s.db.Exec(`UPDATE users SET role=? WHERE id=?`, role, id)
+	return err
+}
+
 func (s *Store) SetPassword(id int64, password string, mustChange bool) error {
 	mc := 0
 	if mustChange {
@@ -517,13 +522,18 @@ func (s *Store) UseInvite(code string, userID int64) (*Team, error) {
 	var teamID int64
 	var expires int64
 	var maxUses, used int
-	err = tx.QueryRow(`SELECT team_id,expires_at,max_uses,used_count FROM invites WHERE code_hash=?`, hashToken(code)).
-		Scan(&teamID, &expires, &maxUses, &used)
+	var status string
+	err = tx.QueryRow(`SELECT i.team_id,i.expires_at,i.max_uses,i.used_count,t.status
+		FROM invites i JOIN teams t ON t.id=i.team_id WHERE i.code_hash=?`, hashToken(code)).
+		Scan(&teamID, &expires, &maxUses, &used, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
+	}
+	if status != "active" {
+		return nil, fmt.Errorf("team 已归档")
 	}
 	if now() > expires || used >= maxUses {
 		return nil, fmt.Errorf("邀请码已过期或已用完")

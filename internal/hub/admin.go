@@ -34,7 +34,8 @@ func (h *Hub) registerAdmin(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/login", h.login)
 	mux.HandleFunc("POST /api/logout", h.logout)
 
-	mux.HandleFunc("GET /api/me", h.wrap(false, func(w http.ResponseWriter, r *http.Request, u *store.User) { h.me(w, u) }))
+	// /api/me must stay reachable while a first-login password change is pending.
+	mux.HandleFunc("GET /api/me", h.wrap(true, func(w http.ResponseWriter, r *http.Request, u *store.User) { h.me(w, u) }))
 	mux.HandleFunc("POST /api/me/password", h.wrap(true, h.changePassword))
 	mux.HandleFunc("GET /api/me/tokens", h.wrap(false, h.listTokens))
 	mux.HandleFunc("POST /api/me/tokens", h.wrap(false, h.createToken))
@@ -454,8 +455,8 @@ func (h *Hub) teamStats(w http.ResponseWriter, r *http.Request, u *store.User) {
 
 func (h *Hub) memberTeam(w http.ResponseWriter, r *http.Request, u *store.User) (*store.Team, bool) {
 	t, err := h.st.TeamByName(r.PathValue("name"))
-	if err != nil {
-		writeError(w, 404, "team 不存在")
+	if err != nil || t.Status != "active" {
+		writeError(w, 404, "team 不存在或已归档")
 		return nil, false
 	}
 	ok, _, _ := h.st.IsMember(t.ID, u.ID)
@@ -547,6 +548,17 @@ func (h *Hub) updateUser(w http.ResponseWriter, r *http.Request, u *store.User) 
 			return
 		}
 		h.st.SetUserStatus(target.ID, req.Status)
+	}
+	if req.Role != "" {
+		if req.Role != "member" && req.Role != "admin" {
+			writeError(w, 400, "角色只能是 member 或 admin")
+			return
+		}
+		if target.ID == u.ID && req.Role != "admin" {
+			writeError(w, 400, "不能取消自己的管理员角色")
+			return
+		}
+		h.st.SetUserRole(target.ID, req.Role)
 	}
 	h.st.Audit(u.ID, "user_update", 0, "", 0, "ok", remoteIP(r))
 	nt, _ := h.st.UserByID(target.ID)
