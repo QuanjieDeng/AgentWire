@@ -111,7 +111,7 @@ Claude Code 自带的跨会话消息只在同一个系统用户内有效。Agent
 | --- | --- |
 | 中心服务 | Linux（推荐）、Windows Server、macOS 均可运行；Go 1.26+ 构建 |
 | 客户端 | Linux 或 Windows；需要 Claude Code **2.1.224+**（跨会话消息） |
-| 构建 Web 后台 | Node.js 20+ 与 npm |
+| 构建 Web 后台（可选） | Node.js 20+ 与 npm；仅在修改 `web/` 源码时需要 |
 | 网络 | 内网；hub 默认监听 `:8443`，明文 `ws://` |
 
 > macOS 客户端可以编译，但命名管道/权限校验未在真实环境验证；不建议生产使用。
@@ -122,16 +122,24 @@ Claude Code 自带的跨会话消息只在同一个系统用户内有效。Agent
 
 ### 1. 构建
 
+仓库已经包含构建好的 Web 后台（`internal/webui/dist/`），直接编译二进制即可，**不需要 Node.js**：
+
 ```bash
 git clone https://github.com/QuanjieDeng/AgentWire.git
 cd AgentWire
 
-# Web 后台（产物会内嵌进二进制）
-cd web && npm ci && npm run build && cd ..
-
-# 单二进制
+# 单二进制（内含 Web 后台）
 go build -o bin/agentwire ./cmd/agentwire
 ```
+
+只有当你修改了 `web/` 下的前端源码时，才需要重新构建 Web 后台（Node.js 20+）：
+
+```bash
+cd web && npm ci && npm run build && cd ..
+```
+
+> 如果前端构建报 `EBADENGINE` 或 `SyntaxError: Unexpected token '?'`，说明本机 Node 版本过低（< 18）。
+> 可以直接跳过前端构建使用仓库自带的 `dist`，或升级到 Node 20 LTS。
 
 Windows 交叉编译：
 
@@ -232,8 +240,8 @@ daemon 会读取 `~/.claude/sessions`，发现存活的 Claude 会话并每 10 �
 
 2. 获取并构建
    - 如果仓库路径不存在：`git clone https://github.com/QuanjieDeng/AgentWire.git ~/AgentWire`
-   - 进入仓库；如果 internal/webui/dist/index.html 不存在：
-     `cd web && npm ci && npm run build && cd ..`
+   - 进入仓库；仓库已包含前端产物 internal/webui/dist/index.html，通常**不需要 Node.js**。
+     仅当该文件缺失时才执行：`cd web && npm ci && npm run build && cd ..`（需要 Node.js 20+）
    - `go build -o bin/agentwire ./cmd/agentwire`
 
 3. 安装到稳定路径
@@ -663,6 +671,7 @@ find /var/backups -name 'agentwire-*.db' -mtime +7 -delete
 | 端口被占用 | 换 `--addr`，并同步修改客户端 `--server` |
 | Windows 命名管道连不上 | 确认 daemon 以**目标用户**身份运行（ACL 只允许该 SID） |
 | hook 没有附加 inbox | 确认 `~/.claude/settings.json` 中有 `UserPromptSubmit` hook；`install` 可幂等补装 |
+| `npm ci` 报 `EBADENGINE`，或 `npm run build` 报 `Unexpected token '?'` | Node 版本 < 18。仓库已带前端产物，直接 `go build` 即可；要改前端请升级到 Node 20+ |
 
 查看日志：
 

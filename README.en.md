@@ -46,18 +46,29 @@ JSON frames into the target Claude session's local messaging channel:
 
 - Hub: Linux recommended; Go 1.26+ to build
 - Client: Linux or Windows, Claude Code **2.1.224+**
-- Web build: Node.js 20+
+- Web build (only when changing `web/`): Node.js 20+
 - Network: trusted LAN; plaintext `ws://` by design (put TLS in front if needed)
 
 ## Build
 
+The repository already contains the built web console (`internal/webui/dist/`), so
+building the binary does **not** require Node.js:
+
 ```bash
-cd web && npm ci && npm run build && cd ..
 go build -o bin/agentwire ./cmd/agentwire
 
 # Windows
 GOOS=windows GOARCH=amd64 go build -o bin/agentwire.exe ./cmd/agentwire
 ```
+
+Rebuild the web console only if you changed sources under `web/` (Node.js 20+):
+
+```bash
+cd web && npm ci && npm run build && cd ..
+```
+
+> `EBADENGINE` or `SyntaxError: Unexpected token '?'` means Node is older than 18.
+> Skip the frontend build and use the committed `dist`, or upgrade to Node 20 LTS.
 
 ## Quick start (hub + first user)
 
@@ -113,8 +124,9 @@ Execute in order. If any step fails, stop and report the raw error.
 2. Fetch and build
    - Clone https://github.com/QuanjieDeng/AgentWire.git to ~/AgentWire if the repo path
      is missing.
-   - If internal/webui/dist/index.html is missing:
-     `cd web && npm ci && npm run build && cd ..`
+   - The repo already contains internal/webui/dist/index.html, so Node.js is usually
+     not needed. Only if that file is missing:
+     `cd web && npm ci && npm run build && cd ..` (requires Node.js 20+)
    - `go build -o bin/agentwire ./cmd/agentwire`
 
 3. Install to a stable path
