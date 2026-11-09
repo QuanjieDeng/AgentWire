@@ -753,4 +753,4 @@ GOOS=windows GOARCH=amd64 go build ./...
 
 ## License
 
-尚未添加。开源发布前请选择许可证（MIT / Apache-2.0 / AGPL-3.0 等）并添加 `LICENSE` 文件。
+本项目采用 [MIT](LICENSE) 许可证。

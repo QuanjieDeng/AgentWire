@@ -263,4 +263,4 @@ on Claude Code internals and may change across versions.
 
 ## License
 
-No license has been added yet. Choose one (MIT / Apache-2.0 / AGPL-3.0) before publishing.
+This project is licensed under the [MIT License](LICENSE).
